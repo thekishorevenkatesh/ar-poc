@@ -15,6 +15,11 @@ export function useVehicleParts(
   const [parts, setParts] = useState<VehiclePart[]>([]);
   const lastRunRef = useRef(0);
   const hasRunOnceRef = useRef(false);
+  const forceRunRef = useRef(0);
+
+  const refresh = () => {
+    forceRunRef.current = Date.now();
+  };
 
   useEffect(() => {
     if (!video || !vehicle || vehicle.label !== "car") {
@@ -25,38 +30,31 @@ export function useVehicleParts(
 
     const now = Date.now();
 
-    // 🔥 Allow FIRST run no matter what
-    if (!hasRunOnceRef.current) {
-      hasRunOnceRef.current = true;
-    } else {
-      // throttle only AFTER first run
-      if (now - lastRunRef.current < PARTS_INTERVAL) return;
+    if (
+      hasRunOnceRef.current &&
+      now - lastRunRef.current < PARTS_INTERVAL &&
+      now - forceRunRef.current > 300
+    ) {
+      return;
     }
 
+    hasRunOnceRef.current = true; // ✅ MISSING LINE
     lastRunRef.current = now;
+
     let cancelled = false;
 
     const run = async () => {
-      console.log("[PARTS] Running parts detection");
-
       const crop = cropFromVideo(video, vehicle.bbox);
       const result = await classifyVehicleParts(crop);
 
       if (cancelled) return;
 
-      if (!result?.length) {
-        console.log("[PARTS] No parts detected");
-        setParts([]);
-        return;
-      }
+      const filtered =
+        result?.filter(
+          (p: any) => p.confidence >= PARTS_CONFIDENCE
+        ) ?? [];
 
-      const filtered = result
-        .filter((p:any) => p.confidence >= PARTS_CONFIDENCE)
-        .slice(0, MAX_PARTS);
-
-      console.log("[PARTS] Detected:", filtered);
-
-      setParts(filtered);
+      setParts(filtered.slice(0, MAX_PARTS));
     };
 
     run();
@@ -66,5 +64,5 @@ export function useVehicleParts(
     };
   }, [video, vehicle]);
 
-  return parts;
+  return { parts, refresh };
 }

@@ -11,12 +11,23 @@ type Props = {
   target?: DetectedObject;
   vehicle?: VehicleInfo | null;
   parts?: VehiclePart[];
+  onRefreshParts?: () => void; // ✅ ADD THIS
 };
 
-export function ARCanvas({ target, vehicle, parts = [] }: Props) {
+export function ARCanvas({
+  target,
+  vehicle,
+  parts = [],
+  onRefreshParts,
+}: Props) {
   return (
     <Canvas camera={{ position: [0, 0, 5] }}>
-      <ARScene target={target} vehicle={vehicle} parts={parts} />
+      <ARScene
+        target={target}
+        vehicle={vehicle}
+        parts={parts}
+        onRefreshParts={onRefreshParts} // ✅ FORWARD
+      />
     </Canvas>
   );
 }

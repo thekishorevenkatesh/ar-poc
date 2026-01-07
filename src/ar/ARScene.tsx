@@ -1,5 +1,3 @@
-// src/ar/ARScene.tsx
-
 import { Html } from "@react-three/drei";
 import { useARAnchor } from "./useARAnchor";
 import { usePartAnchor } from "./usePartAnchor";
@@ -21,18 +19,14 @@ function getGuidance(
   const area = w * h;
   const center: [number, number] = [x + w / 2, y + h / 2];
 
-  if (area < 120 * 120) {
-    return "Move closer to the vehicle";
-  }
+  if (area < 120 * 120) return "Move closer to the vehicle";
 
   if (lastCenter) {
     const moved =
       Math.abs(lastCenter[0] - center[0]) > 40 ||
       Math.abs(lastCenter[1] - center[1]) > 40;
 
-    if (moved) {
-      return "Hold steady";
-    }
+    if (moved) return "Hold steady";
   }
 
   return null;
@@ -44,19 +38,10 @@ function partColor(conf: number) {
   return "#ff6b6b";
 }
 
-/* 🔔 Safe haptic helper (NO logic change) */
 function triggerHapticOnce() {
   try {
-    if (
-      typeof navigator !== "undefined" &&
-      "vibrate" in navigator &&
-      typeof navigator.vibrate === "function"
-    ) {
-      navigator.vibrate(30);
-    }
-  } catch {
-    // silently ignore (iOS / unsupported)
-  }
+    if ("vibrate" in navigator) navigator.vibrate(30);
+  } catch {}
 }
 
 /* ───────────── Types ───────────── */
@@ -65,28 +50,26 @@ type Props = {
   target?: DetectedObject;
   vehicle?: VehicleInfo | null;
   parts?: VehiclePart[];
+  onRefreshParts?: () => void; // ✅ ADDED
 };
 
 /* ───────────── Component ───────────── */
 
-export function ARScene({ target, vehicle, parts = [] }: Props) {
+export function ARScene({
+  target,
+  vehicle,
+  parts = [],
+  onRefreshParts, // ✅ ADDED
+}: Props) {
   const anchorRef = useARAnchor(target);
 
-  // Motion tracking
   const lastCenterRef = useRef<[number, number] | null>(null);
-
-  // Guidance state
   const [guidance, setGuidance] = useState<string | null>(null);
   const guidanceTimerRef = useRef<number | null>(null);
-
-  // Lock + haptic
   const lockedRef = useRef(false);
 
-  // Selected part
-  const [selectedPart, setSelectedPart] =
-    useState<VehiclePart | null>(null);
+  const [selectedPart, setSelectedPart] = useState<VehiclePart | null>(null);
 
-  // Confidence smoothing
   const smoothConfRef = useRef<Map<string, number>>(new Map());
 
   /* ───────────── Guidance + Lock Logic ───────────── */
@@ -101,10 +84,7 @@ export function ARScene({ target, vehicle, parts = [] }: Props) {
     const [x, y, w, h] = target.bbox;
     const center: [number, number] = [x + w / 2, y + h / 2];
 
-    const newGuidance = getGuidance(
-      target,
-      lastCenterRef.current
-    );
+    const newGuidance = getGuidance(target, lastCenterRef.current);
 
     lastCenterRef.current = center;
 
@@ -116,24 +96,17 @@ export function ARScene({ target, vehicle, parts = [] }: Props) {
         clearTimeout(guidanceTimerRef.current);
         guidanceTimerRef.current = null;
       }
-    } else {
-      // ✅ Stable lock
-      if (!lockedRef.current) {
-        lockedRef.current = true;
-
-        // 🔔 Haptic (safe, one-time)
-        triggerHapticOnce();
-
-        // Auto-hide guidance
-        guidanceTimerRef.current = window.setTimeout(
-          () => setGuidance(null),
-          800
-        );
-      }
+    } else if (!lockedRef.current) {
+      lockedRef.current = true;
+      triggerHapticOnce();
+      guidanceTimerRef.current = window.setTimeout(
+        () => setGuidance(null),
+        800
+      );
     }
   }, [target]);
 
-  /* ───────────── Vehicle Label ───────────── */
+  const isLocked = lockedRef.current && !!vehicle; // ✅ ADDED
 
   let vehicleLabel = "Scanning vehicle…";
   if (target && !vehicle) vehicleLabel = "Vehicle detected";
@@ -145,13 +118,23 @@ export function ARScene({ target, vehicle, parts = [] }: Props) {
     <>
       <ambientLight intensity={0.8} />
 
-      {/* Invisible ground */}
-      <mesh rotation-x={-Math.PI / 2} position={[0, -1, -2]}>
-        <planeGeometry args={[10, 10]} />
-        <meshStandardMaterial visible={false} />
-      </mesh>
-
       <group ref={anchorRef}>
+        {/* 🔵 VEHICLE LOCK RING — ADDED */}
+        {isLocked && (
+          <Html center distanceFactor={8}>
+            <div
+              style={{
+                width: 140,
+                height: 140,
+                borderRadius: "50%",
+                border: "2px solid rgba(0,255,204,0.9)",
+                animation: "lockPulse 1.2s ease-out",
+                pointerEvents: "none",
+              }}
+            />
+          </Html>
+        )}
+
         {/* 🚗 Vehicle label */}
         {target && (
           <Html center distanceFactor={8}>
@@ -194,12 +177,9 @@ export function ARScene({ target, vehicle, parts = [] }: Props) {
         {parts.map((part, index) => {
           const partRef = usePartAnchor(part);
 
-          const prev =
-            smoothConfRef.current.get(part.name) ??
-            part.confidence;
+          const prev = smoothConfRef.current.get(part.name) ?? part.confidence;
 
-          const smoothed =
-            prev * 0.7 + part.confidence * 0.3;
+          const smoothed = prev * 0.7 + part.confidence * 0.3;
 
           smoothConfRef.current.set(part.name, smoothed);
 
@@ -209,17 +189,15 @@ export function ARScene({ target, vehicle, parts = [] }: Props) {
             <group ref={partRef} key={index}>
               <Html distanceFactor={10}>
                 <div
-                  onClick={() =>
-                    setSelectedPart(
-                      isSelected ? null : part
-                    )
-                  }
+                  onClick={() => {
+                    setSelectedPart(isSelected ? null : part);
+                    onRefreshParts?.(); // 🔁 ADDED
+                  }}
                   style={{
                     padding: "6px 8px",
                     background: "rgba(20,20,20,0.95)",
                     borderRadius: 6,
                     fontSize: 11,
-                    whiteSpace: "nowrap",
                     color: partColor(smoothed),
                     cursor: "pointer",
                     border: isSelected
@@ -227,48 +205,24 @@ export function ARScene({ target, vehicle, parts = [] }: Props) {
                       : "1px solid transparent",
                   }}
                 >
-                  <div style={{ marginBottom: 4 }}>
-                    {part.name}
-                  </div>
-
-                  <div
-                    style={{
-                      width: 60,
-                      height: 4,
-                      background: "#333",
-                      borderRadius: 2,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${Math.round(
-                          smoothed * 100
-                        )}%`,
-                        height: "100%",
-                        background: partColor(smoothed),
-                      }}
-                    />
-                  </div>
-
-                  {isSelected && (
-                    <div
-                      style={{
-                        marginTop: 6,
-                        fontSize: 10,
-                        opacity: 0.8,
-                      }}
-                    >
-                      Confidence:{" "}
-                      {Math.round(smoothed * 100)}%
-                    </div>
-                  )}
+                  {part.name}
                 </div>
               </Html>
             </group>
           );
         })}
       </group>
+      <Html>
+        {/* 🔵 Lock ring animation */}
+        <style>
+          {`
+          @keyframes lockPulse {
+            0% { transform: scale(0.7); opacity: 0.8; }
+            100% { transform: scale(1.1); opacity: 0.2; }
+          }
+        `}
+        </style>
+      </Html>
     </>
   );
 }

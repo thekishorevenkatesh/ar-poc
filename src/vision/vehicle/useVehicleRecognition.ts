@@ -31,6 +31,7 @@ export function useVehicleRecognition(
   const cacheRef = useRef<CacheEntry[]>([]);
 
   useEffect(() => {
+    // ❌ Hard stop for non-vehicle
     if (!video || !object || object.label !== "car") {
       lockedRef.current = false;
       lastCenterRef.current = null;
@@ -59,14 +60,11 @@ export function useVehicleRecognition(
     lastCenterRef.current = center;
 
     /* ── 2️⃣ Cache lookup ── */
-    const cached = cacheRef.current.find(c => {
-      const [cx, cy] = c.center;
-      return (
-        Math.abs(cx - center[0]) < 40 &&
-        Math.abs(cy - center[1]) < 40 &&
-        now - c.lastSeen < CACHE_TTL
-      );
-    });
+    const cached = cacheRef.current.find(c =>
+      Math.abs(c.center[0] - center[0]) < 40 &&
+      Math.abs(c.center[1] - center[1]) < 40 &&
+      now - c.lastSeen < CACHE_TTL
+    );
 
     if (cached) {
       cached.lastSeen = now;

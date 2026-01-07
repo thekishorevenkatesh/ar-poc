@@ -13,64 +13,61 @@ import { useVehicleParts } from "../vision/parts/useVehicleParts";
 import { useVehicleBadgeRecognition } from "../vision/badge/useVehicleBadgeRecognition";
 import { mergeVehicleResults } from "../vision/vehicle/mergeVehicleResults";
 
+import { pickVehicle } from "../utils/vehicleFilter";
+
 export function ARPage() {
-  /* ───────────── UI state ───────────── */
-  const [scene, setScene] =
-    useState<"intro" | "ar">("intro");
+  /* ───────── UI state ───────── */
+  const [scene, setScene] = useState<"intro" | "ar">("intro");
   const [showParts, setShowParts] = useState(true);
 
-  /* ───────────── Hooks (ALWAYS CALLED) ───────────── */
-  const { videoRef, ready, error, dimensions } =
-    useCamera();
+  /* ───────── Camera (enabled only in AR) ───────── */
+  const { videoRef, ready, error, dimensions } = useCamera(scene === "ar");
 
+  /* ───────── Object detection ───────── */
   const objects = useObjectDetection(
     videoRef.current ?? undefined,
-    ready && scene === "ar" // 👈 only active in AR
+    ready && scene === "ar"
   );
 
-  const primaryObject = objects[0];
+  /* ✅ PICK ONLY VEHICLE */
+  const vehicleObject = pickVehicle(objects);
 
+  /* ───────── Vehicle recognition ───────── */
   const vehicle = useVehicleRecognition(
     videoRef.current ?? undefined,
-    primaryObject
+    vehicleObject
   );
 
   const badge = useVehicleBadgeRecognition(
     videoRef.current ?? undefined,
-    primaryObject
+    vehicleObject
   );
 
-  const finalVehicle = mergeVehicleResults(
-    vehicle,
-    badge
-  );
+  const finalVehicle = mergeVehicleResults(vehicle, badge);
 
-  const parts = useVehicleParts(
+  /* ───────── Vehicle parts ───────── */
+  const { parts, refresh } = useVehicleParts(
     videoRef.current ?? undefined,
-    primaryObject
+    vehicleObject
   );
 
-  /* ───────────── INTRO SCENE ───────────── */
+  /* ───────── Intro scene ───────── */
   if (scene === "intro") {
-    return (
-      <IntroScene
-        onStart={() => setScene("ar")}
-      />
-    );
+    return <IntroScene onStart={() => setScene("ar")} />;
   }
 
-  /* ───────────── AR SCENE ───────────── */
+  /* ───────── AR scene ───────── */
   return (
     <div
       style={{
         width: "100vw",
         height: "100vh",
         position: "relative",
-        overflow: "hidden",
         background: "#000",
+        overflow: "hidden",
       }}
     >
-      {/* 🎥 Camera */}
+      {/* Camera */}
       <video
         ref={videoRef}
         playsInline
@@ -86,20 +83,24 @@ export function ARPage() {
 
       {!ready && <StartARButton />}
 
+      {/* Debug boxes */}
       <BoundingBoxOverlay
         objects={objects}
         videoWidth={dimensions.width}
         videoHeight={dimensions.height}
       />
 
+      {/* AR layer */}
       <div style={{ position: "absolute", inset: 0 }}>
         <ARCanvas
-          target={primaryObject}
+          target={vehicleObject}
           vehicle={finalVehicle}
           parts={showParts ? parts : []}
+          onRefreshParts={refresh}
         />
       </div>
 
+      {/* Toggle */}
       {ready && (
         <div
           style={{
@@ -110,17 +111,13 @@ export function ARPage() {
           }}
         >
           <button
-            onClick={() => setShowParts(v => !v)}
+            onClick={() => setShowParts((v) => !v)}
             style={{
               padding: "8px 12px",
               borderRadius: 6,
               border: "none",
-              background: showParts
-                ? "#00ffcc"
-                : "#333",
-              color: showParts
-                ? "#000"
-                : "#fff",
+              background: showParts ? "#00ffcc" : "#333",
+              color: showParts ? "#000" : "#fff",
             }}
           >
             {showParts ? "Hide Parts" : "Show Parts"}
@@ -128,16 +125,19 @@ export function ARPage() {
         </div>
       )}
 
+      {/* Status */}
       <DebugPanel
         message={
           error
             ? error
-            : primaryObject
+            : vehicleObject
             ? finalVehicle
               ? `Detected ${finalVehicle.brand} ${finalVehicle.model}`
               : "Identifying vehicle…"
             : ready
-            ? "Scanning for vehicles…"
+            ? objects.length > 0
+              ? "Non-vehicle detected. Point camera at a vehicle."
+              : "Scanning for vehicles…"
             : "Starting camera…"
         }
       />
