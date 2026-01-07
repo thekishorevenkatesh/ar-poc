@@ -1,4 +1,3 @@
-// src/ar/usePartAnchor.ts
 import { useFrame, useThree } from "@react-three/fiber";
 import { useRef } from "react";
 import * as THREE from "three";

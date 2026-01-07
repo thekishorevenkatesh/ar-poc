@@ -1,47 +1,44 @@
+import * as tf from "@tensorflow/tfjs";
 import type { VehicleInfo } from "./useVehicleRecognition";
 
-const ROBOFLOW_API_KEY = "PASTE_YOUR_API_KEY";
-const ROBOFLOW_ENDPOINT =
-  "https://detect.roboflow.com/car-make-model/1";
+let vehicleModel: tf.LayersModel | null = null;
+let labels: string[] = [];
+
+export async function loadVehicleModel() {
+  if (!vehicleModel) {
+    vehicleModel = await tf.loadLayersModel(
+      "/models/vehicle-brand/model.json"
+    );
+    const res = await fetch("/models/vehicle-brand/labels.json");
+    labels = await res.json();
+  }
+}
 
 export async function classifyVehicle(
   crop: HTMLCanvasElement
 ): Promise<VehicleInfo | null> {
-  try {
-    const imageBase64 = crop.toDataURL("image/jpeg");
+  if (!vehicleModel) await loadVehicleModel();
 
-    const response = await fetch(
-      `${ROBOFLOW_ENDPOINT}?api_key=${ROBOFLOW_API_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: imageBase64,
-      }
-    );
+  const tensor = tf.browser
+    .fromPixels(crop)
+    .resizeBilinear([224, 224])
+    .toFloat()
+    .div(255)
+    .expandDims(0);
 
-    const data = await response.json();
+  const prediction = vehicleModel!.predict(tensor) as tf.Tensor;
+  const scores = Array.from(await prediction.data());
 
-    if (!data.predictions || data.predictions.length === 0) {
-      return null;
-    }
+  const maxIdx = scores.indexOf(Math.max(...scores));
+  const confidence = scores[maxIdx];
 
-    // Take highest confidence prediction
-    const best = data.predictions.sort(
-      (a: any, b: any) => b.confidence - a.confidence
-    )[0];
+  if (confidence < 0.6) return null;
 
-    // Roboflow class usually looks like "Hyundai Creta"
-    const parts = best.class.split(" ");
+  const [brand, ...modelParts] = labels[maxIdx].split(" ");
 
-    return {
-      brand: parts[0],
-      model: parts.slice(1).join(" "),
-      confidence: best.confidence,
-    };
-  } catch (err) {
-    console.error("Roboflow vehicle recognition failed", err);
-    return null;
-  }
+  return {
+    brand,
+    model: modelParts.join(" "),
+    confidence,
+  };
 }

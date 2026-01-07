@@ -105,7 +105,7 @@ export function ARPage() {
         <div
           style={{
             position: "absolute",
-            bottom: 20,
+            top: 20,
             right: 20,
             zIndex: 20,
           }}
@@ -116,8 +116,8 @@ export function ARPage() {
               padding: "8px 12px",
               borderRadius: 6,
               border: "none",
-              background: showParts ? "#00ffcc" : "#333",
-              color: showParts ? "#000" : "#fff",
+              background: showParts ? "#1D3D9F" : "#333",
+              color: "#fff",
             }}
           >
             {showParts ? "Hide Parts" : "Show Parts"}

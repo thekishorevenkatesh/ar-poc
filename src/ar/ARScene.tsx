@@ -19,7 +19,7 @@ function getGuidance(
   const area = w * h;
   const center: [number, number] = [x + w / 2, y + h / 2];
 
-  if (area < 120 * 120) return "Move closer to the vehicle";
+  if (area < 30 * 30) return "Move closer to the vehicle";
 
   if (lastCenter) {
     const moved =
@@ -40,8 +40,12 @@ function partColor(conf: number) {
 
 function triggerHapticOnce() {
   try {
-    if ("vibrate" in navigator) navigator.vibrate(30);
-  } catch {}
+    if ("vibrate" in navigator) {
+      navigator.vibrate(50);
+    }
+  } catch (e) {
+    // Ignore
+  }
 }
 
 /* ───────────── Types ───────────── */
@@ -104,6 +108,13 @@ export function ARScene({
         800
       );
     }
+
+    return () => {
+      if (guidanceTimerRef.current) {
+        clearTimeout(guidanceTimerRef.current);
+        guidanceTimerRef.current = null;
+      }
+    };
   }, [target]);
 
   const isLocked = lockedRef.current && !!vehicle; // ✅ ADDED

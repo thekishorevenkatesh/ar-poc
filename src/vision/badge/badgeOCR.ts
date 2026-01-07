@@ -1,27 +1,37 @@
-import { createWorker, type Worker } from "tesseract.js";
+import { createWorker } from "tesseract.js";
 
-let worker: Worker | null = null;
+let workerPromise: Promise<any> | null = null;
 
 async function getWorker() {
-  if (!worker) {
-    worker = await createWorker("eng");
-    await worker.setParameters({
-      tessedit_char_whitelist:
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-      preserve_interword_spaces: "0",
-    });
+  if (!workerPromise) {
+    workerPromise = (async () => {
+      const worker = await createWorker("eng");
+      await worker.setParameters({
+        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+      });
+      return worker;
+    })();
   }
-  return worker;
+  return workerPromise;
 }
 
 export async function readBadgeText(
   crop: HTMLCanvasElement
-): Promise<string> {
-  const w = await getWorker();
+): Promise<string | null> {
+  try {
+    const worker = await getWorker();
+    const result = await worker.recognize(crop);
 
-  const {
-    data: { text },
-  } = await w.recognize(crop);
+    const raw = result.data.text ?? "";
 
-  return text.replace(/\s+/g, "").toUpperCase();
+    const text = raw
+      .replace(/[^A-Z]/gi, "")
+      .toUpperCase()
+      .trim();
+
+    return text.length >= 3 ? text : null;
+  } catch (err) {
+    console.error("Badge OCR failed", err);
+    return null;
+  }
 }

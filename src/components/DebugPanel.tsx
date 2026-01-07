@@ -7,7 +7,7 @@ export function DebugPanel({ message }: Props) {
     <div
       style={{
         position: "fixed",
-        bottom: 12,
+        top: 12,
         left: 12,
         padding: "8px 12px",
         background: "rgba(0,0,0,0.7)",

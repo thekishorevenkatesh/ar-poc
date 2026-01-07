@@ -1,5 +1,3 @@
-// src/ar/ARCanvas.tsx
-
 import { Canvas } from "@react-three/fiber";
 import { ARScene } from "./ARScene";
 
@@ -11,7 +9,7 @@ type Props = {
   target?: DetectedObject;
   vehicle?: VehicleInfo | null;
   parts?: VehiclePart[];
-  onRefreshParts?: () => void; // ✅ ADD THIS
+  onRefreshParts?: () => void; 
 };
 
 export function ARCanvas({
@@ -26,7 +24,7 @@ export function ARCanvas({
         target={target}
         vehicle={vehicle}
         parts={parts}
-        onRefreshParts={onRefreshParts} // ✅ FORWARD
+        onRefreshParts={onRefreshParts}
       />
     </Canvas>
   );
