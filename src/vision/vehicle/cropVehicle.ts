@@ -5,6 +5,9 @@ export function cropFromVideo(
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
-  canvas.getContext("2d")!.drawImage(video, x, y, w, h, 0, 0, w, h);
+
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(video, x, y, w, h, 0, 0, w, h);
+
   return canvas;
 }
