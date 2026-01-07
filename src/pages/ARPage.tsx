@@ -14,11 +14,43 @@ import { useVehicleBadgeRecognition } from "../vision/badge/useVehicleBadgeRecog
 import { mergeVehicleResults } from "../vision/vehicle/mergeVehicleResults";
 
 export function ARPage() {
-  /* ───────────── Scene control ───────────── */
+  /* ───────────── UI state ───────────── */
   const [scene, setScene] =
     useState<"intro" | "ar">("intro");
+  const [showParts, setShowParts] = useState(true);
 
-  // 👉 Intro screen first
+  /* ───────────── Hooks (ALWAYS CALLED) ───────────── */
+  const { videoRef, ready, error, dimensions } =
+    useCamera();
+
+  const objects = useObjectDetection(
+    videoRef.current ?? undefined,
+    ready && scene === "ar" // 👈 only active in AR
+  );
+
+  const primaryObject = objects[0];
+
+  const vehicle = useVehicleRecognition(
+    videoRef.current ?? undefined,
+    primaryObject
+  );
+
+  const badge = useVehicleBadgeRecognition(
+    videoRef.current ?? undefined,
+    primaryObject
+  );
+
+  const finalVehicle = mergeVehicleResults(
+    vehicle,
+    badge
+  );
+
+  const parts = useVehicleParts(
+    videoRef.current ?? undefined,
+    primaryObject
+  );
+
+  /* ───────────── INTRO SCENE ───────────── */
   if (scene === "intro") {
     return (
       <IntroScene
@@ -27,44 +59,7 @@ export function ARPage() {
     );
   }
 
-  /* ───────────── Existing AR logic (UNCHANGED) ───────────── */
-
-  const { videoRef, ready, error, dimensions } = useCamera();
-
-  const [showParts, setShowParts] = useState(true);
-
-  // 1️⃣ Generic object detection
-  const objects = useObjectDetection(
-    videoRef.current ?? undefined,
-    ready
-  );
-
-  const primaryObject = objects[0];
-
-  // 2️⃣ Shape-based recognition
-  const vehicle = useVehicleRecognition(
-    videoRef.current ?? undefined,
-    primaryObject
-  );
-
-  // 3️⃣ Badge-based recognition
-  const badge = useVehicleBadgeRecognition(
-    videoRef.current ?? undefined,
-    primaryObject
-  );
-
-  // 4️⃣ Merge results
-  const finalVehicle = mergeVehicleResults(
-    vehicle,
-    badge
-  );
-
-  // 5️⃣ Parts detection
-  const parts = useVehicleParts(
-    videoRef.current ?? undefined,
-    primaryObject
-  );
-
+  /* ───────────── AR SCENE ───────────── */
   return (
     <div
       style={{
@@ -75,7 +70,7 @@ export function ARPage() {
         background: "#000",
       }}
     >
-      {/* 🎥 Camera feed */}
+      {/* 🎥 Camera */}
       <video
         ref={videoRef}
         playsInline
@@ -89,17 +84,14 @@ export function ARPage() {
         }}
       />
 
-      {/* ▶️ Start AR button (safety fallback) */}
       {!ready && <StartARButton />}
 
-      {/* 🟩 Debug bounding boxes */}
       <BoundingBoxOverlay
         objects={objects}
         videoWidth={dimensions.width}
         videoHeight={dimensions.height}
       />
 
-      {/* 🧠 AR Layer */}
       <div style={{ position: "absolute", inset: 0 }}>
         <ARCanvas
           target={primaryObject}
@@ -108,7 +100,6 @@ export function ARPage() {
         />
       </div>
 
-      {/* 🔘 Toggle UI */}
       {ready && (
         <div
           style={{
@@ -116,8 +107,6 @@ export function ARPage() {
             bottom: 20,
             right: 20,
             zIndex: 20,
-            display: "flex",
-            gap: 8,
           }}
         >
           <button
@@ -132,18 +121,13 @@ export function ARPage() {
               color: showParts
                 ? "#000"
                 : "#fff",
-              fontSize: 13,
-              cursor: "pointer",
             }}
           >
-            {showParts
-              ? "Hide Parts"
-              : "Show Parts"}
+            {showParts ? "Hide Parts" : "Show Parts"}
           </button>
         </div>
       )}
 
-      {/* ℹ️ Status panel */}
       <DebugPanel
         message={
           error
