@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-
-export function useCamera() {
+export function useCamera(enabled: boolean) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -10,12 +9,16 @@ export function useCamera() {
   });
 
   useEffect(() => {
+    if (!enabled) return; // 👈 DO NOTHING until enabled
+
     let stream: MediaStream;
 
     async function startCamera() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
+          video: {
+            facingMode: "environment",
+          },
           audio: false,
         });
 
@@ -30,8 +33,8 @@ export function useCamera() {
         });
 
         setReady(true);
-      } catch {
-        setError("Camera access denied");
+      } catch (err) {
+        setError("Camera permission denied or unavailable");
       }
     }
 
@@ -40,7 +43,7 @@ export function useCamera() {
     return () => {
       stream?.getTracks().forEach(t => t.stop());
     };
-  }, []);
+  }, [enabled]);
 
   return { videoRef, ready, error, dimensions };
 }

@@ -1,20 +1,5 @@
-# AR Vision POC
+AR Vehicle Scanner – Web POC
 
-A web-based AR proof of concept built with **React + TypeScript** that performs **real-time object detection** and **automatic vehicle make & model recognition**, displaying **stable AR labels** over detected vehicles.
+A web-based AR proof of concept built with React + TypeScript that uses the mobile camera to detect vehicles in real time and overlay AR labels on top of them.
 
-## Features
-- Live mobile camera AR
-- Real-time object & vehicle detection
-- Vehicle brand and model recognition
-- Confidence smoothing across frames
-- AR-anchored 3D labels
-- Single web codebase (no app install)
-
-## Tech Stack
-- React + TypeScript
-- Three.js + React Three Fiber
-- TensorFlow.js
-- WebXR (optional)
-
-## Notes
-This is a web AR POC. Some advanced AR features (depth, occlusion) require native ARCore / ARKit.
+This project focuses on architecture, stability, and extensibility, not production-grade AR.

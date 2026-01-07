@@ -10,9 +10,14 @@ import { cropFromVideo } from "../vision/utils/cropVehicle";
 import { isApacheBike } from "../vision/bike/useApacheIdentification";
 import { detectApacheParts } from "../vision/bike/useApacheParts";
 import type { VehiclePart } from "../vision/bike/types";
+import { IntroScene } from "./IntroScene";
 
 export function ARPage() {
-  const { videoRef, ready, error, dimensions } = useCamera();
+  const [scene, setScene] = useState<"intro" | "ar">("intro");
+
+  /* ───────── Camera (enabled only in AR) ───────── */
+  const { videoRef, ready, error, dimensions } = useCamera(scene === "ar");
+
   const objects = useObjectDetection(videoRef.current ?? undefined, ready);
   const primary = objects[0];
 
@@ -34,7 +39,7 @@ export function ARPage() {
 
     const crop = cropFromVideo(videoRef.current, primary.bbox);
 
-    isApacheBike(crop).then(result => {
+    isApacheBike(crop).then((result) => {
       setIsApache(result);
       if (!result) setParts([]);
     });
@@ -47,7 +52,9 @@ export function ARPage() {
     const crop = cropFromVideo(videoRef.current, primary.bbox);
     detectApacheParts(crop).then(setParts);
   }, [isApache, primary]);
-
+  if (scene === "intro") {
+    return <IntroScene onStart={() => setScene("ar")} />;
+  }
   return (
     <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
       <video
