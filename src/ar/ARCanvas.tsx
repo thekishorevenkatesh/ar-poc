@@ -9,7 +9,7 @@ type Props = {
   target?: DetectedObject;
   vehicle?: VehicleInfo | null;
   parts?: VehiclePart[];
-  onRefreshParts?: () => void; 
+  onRefreshParts?: () => void;
 };
 
 export function ARCanvas({
