@@ -1,73 +1,55 @@
-import { useState } from "react";
-
+import { useEffect, useState } from "react";
 import { ARCanvas } from "../ar/ARCanvas";
-import { StartARButton } from "../ar/StartARButton";
 import { DebugPanel } from "../components/DebugPanel";
 import { BoundingBoxOverlay } from "../components/BoundingBoxOverlay";
-import { IntroScene } from "./IntroScene";
 
-import { useCamera } from "../vision/useCamera";
-import { useObjectDetection } from "../vision/useObjectDetection";
-import { useVehicleRecognition } from "../vision/vehicle/useVehicleRecognition";
-import { useVehicleParts } from "../vision/parts/useVehicleParts";
-import { useVehicleBadgeRecognition } from "../vision/badge/useVehicleBadgeRecognition";
-import { mergeVehicleResults } from "../vision/vehicle/mergeVehicleResults";
+import { useCamera } from "../vision/camera/useCamera";
+import { useObjectDetection } from "../vision/detector/useObjectDetection";
+import { cropFromVideo } from "../vision/utils/cropVehicle";
 
-import { pickVehicle } from "../utils/vehicleFilter";
+import { isApacheBike } from "../vision/bike/useApacheIdentification";
+import { detectApacheParts } from "../vision/bike/useApacheParts";
+import type { VehiclePart } from "../vision/bike/types";
 
 export function ARPage() {
-  /* ───────── UI state ───────── */
-  const [scene, setScene] = useState<"intro" | "ar">("intro");
-  const [showParts, setShowParts] = useState(true);
+  const { videoRef, ready, error, dimensions } = useCamera();
+  const objects = useObjectDetection(videoRef.current ?? undefined, ready);
+  const primary = objects[0];
 
-  /* ───────── Camera (enabled only in AR) ───────── */
-  const { videoRef, ready, error, dimensions } = useCamera(scene === "ar");
+  const [isApache, setIsApache] = useState(false);
+  const [parts, setParts] = useState<VehiclePart[]>([]);
 
-  /* ───────── Object detection ───────── */
-  const objects = useObjectDetection(
-    videoRef.current ?? undefined,
-    ready && scene === "ar"
-  );
+  // 🔍 Identify Apache
+  useEffect(() => {
+    if (!videoRef.current || !primary) return;
 
-  /* ✅ PICK ONLY VEHICLE */
-  const vehicleObject = pickVehicle(objects);
+    if (primary.label !== "motorcycle") {
+      setIsApache(false);
+      setParts([]);
+      return;
+    }
 
-  /* ───────── Vehicle recognition ───────── */
-  const vehicle = useVehicleRecognition(
-    videoRef.current ?? undefined,
-    vehicleObject
-  );
+    const [, , w, h] = primary.bbox;
+    if (w * h < 120 * 120) return; // 👈 size gate
 
-  const badge = useVehicleBadgeRecognition(
-    videoRef.current ?? undefined,
-    vehicleObject
-  );
+    const crop = cropFromVideo(videoRef.current, primary.bbox);
 
-  const finalVehicle = mergeVehicleResults(vehicle, badge);
+    isApacheBike(crop).then(result => {
+      setIsApache(result);
+      if (!result) setParts([]);
+    });
+  }, [primary]);
 
-  /* ───────── Vehicle parts ───────── */
-  const { parts, refresh } = useVehicleParts(
-    videoRef.current ?? undefined,
-    vehicleObject
-  );
+  // 🔧 Parts detection
+  useEffect(() => {
+    if (!isApache || !videoRef.current || !primary) return;
 
-  /* ───────── Intro scene ───────── */
-  if (scene === "intro") {
-    return <IntroScene onStart={() => setScene("ar")} />;
-  }
+    const crop = cropFromVideo(videoRef.current, primary.bbox);
+    detectApacheParts(crop).then(setParts);
+  }, [isApache, primary]);
 
-  /* ───────── AR scene ───────── */
   return (
-    <div
-      style={{
-        width: "100vw",
-        height: "100vh",
-        position: "relative",
-        background: "#000",
-        overflow: "hidden",
-      }}
-    >
-      {/* Camera */}
+    <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
       <video
         ref={videoRef}
         playsInline
@@ -81,63 +63,24 @@ export function ARPage() {
         }}
       />
 
-      {!ready && <StartARButton />}
-
-      {/* Debug boxes */}
       <BoundingBoxOverlay
         objects={objects}
         videoWidth={dimensions.width}
         videoHeight={dimensions.height}
       />
 
-      {/* AR layer */}
-      <div style={{ position: "absolute", inset: 0 }}>
-        <ARCanvas
-          target={vehicleObject}
-          vehicle={finalVehicle}
-          parts={showParts ? parts : []}
-          onRefreshParts={refresh}
-        />
-      </div>
+      <ARCanvas target={primary} parts={parts} />
 
-      {/* Toggle */}
-      {ready && (
-        <div
-          style={{
-            position: "absolute",
-            top: 20,
-            right: 20,
-            zIndex: 20,
-          }}
-        >
-          <button
-            onClick={() => setShowParts((v) => !v)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 6,
-              border: "none",
-              background: showParts ? "#1D3D9F" : "#333",
-              color: "#fff",
-            }}
-          >
-            {showParts ? "Hide Parts" : "Show Parts"}
-          </button>
-        </div>
-      )}
-
-      {/* Status */}
       <DebugPanel
         message={
           error
             ? error
-            : vehicleObject
-            ? finalVehicle
-              ? `Detected ${finalVehicle.brand} ${finalVehicle.model}`
-              : "Identifying vehicle…"
+            : primary
+            ? isApache
+              ? "TVS Apache RTR 200 4V detected"
+              : `${primary.label} detected`
             : ready
-            ? objects.length > 0
-              ? "Non-vehicle detected. Point camera at a vehicle."
-              : "Scanning for vehicles…"
+            ? "Scanning…"
             : "Starting camera…"
         }
       />
