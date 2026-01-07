@@ -1,6 +1,6 @@
 import type { VehicleInfo } from "./useVehicleRecognition";
 
-const ROBOFLOW_API_KEY = "YOUR_API_KEY_HERE";
+const ROBOFLOW_API_KEY = "PASTE_YOUR_API_KEY";
 const ROBOFLOW_ENDPOINT =
   "https://detect.roboflow.com/car-make-model/1";
 
@@ -8,37 +8,40 @@ export async function classifyVehicle(
   crop: HTMLCanvasElement
 ): Promise<VehicleInfo | null> {
   try {
-    const image = crop.toDataURL("image/jpeg");
+    const imageBase64 = crop.toDataURL("image/jpeg");
 
-    const res = await fetch(
+    const response = await fetch(
       `${ROBOFLOW_ENDPOINT}?api_key=${ROBOFLOW_API_KEY}`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: image,
+        body: imageBase64,
       }
     );
 
-    const data = await res.json();
+    const data = await response.json();
 
     if (!data.predictions || data.predictions.length === 0) {
       return null;
     }
 
-    // Take the most confident prediction
+    // Take highest confidence prediction
     const best = data.predictions.sort(
       (a: any, b: any) => b.confidence - a.confidence
     )[0];
 
+    // Roboflow class usually looks like "Hyundai Creta"
+    const parts = best.class.split(" ");
+
     return {
-      brand: best.class.split(" ")[0],
-      model: best.class.replace(best.class.split(" ")[0], "").trim(),
+      brand: parts[0],
+      model: parts.slice(1).join(" "),
       confidence: best.confidence,
     };
   } catch (err) {
-    console.error("Vehicle recognition failed", err);
+    console.error("Roboflow vehicle recognition failed", err);
     return null;
   }
 }
