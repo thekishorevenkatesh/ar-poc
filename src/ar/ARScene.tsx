@@ -44,6 +44,21 @@ function partColor(conf: number) {
   return "#ff6b6b";
 }
 
+/* 🔔 Safe haptic helper (NO logic change) */
+function triggerHapticOnce() {
+  try {
+    if (
+      typeof navigator !== "undefined" &&
+      "vibrate" in navigator &&
+      typeof navigator.vibrate === "function"
+    ) {
+      navigator.vibrate(30);
+    }
+  } catch {
+    // silently ignore (iOS / unsupported)
+  }
+}
+
 /* ───────────── Types ───────────── */
 
 type Props = {
@@ -67,11 +82,11 @@ export function ARScene({ target, vehicle, parts = [] }: Props) {
   // Lock + haptic
   const lockedRef = useRef(false);
 
-  // Selected part (tap)
+  // Selected part
   const [selectedPart, setSelectedPart] =
     useState<VehiclePart | null>(null);
 
-  // Confidence smoothing store
+  // Confidence smoothing
   const smoothConfRef = useRef<Map<string, number>>(new Map());
 
   /* ───────────── Guidance + Lock Logic ───────────── */
@@ -102,16 +117,14 @@ export function ARScene({ target, vehicle, parts = [] }: Props) {
         guidanceTimerRef.current = null;
       }
     } else {
-      // No guidance → stable
+      // ✅ Stable lock
       if (!lockedRef.current) {
         lockedRef.current = true;
 
-        // 📳 Haptic feedback (mobile)
-        if ("vibrate" in navigator) {
-          navigator.vibrate(30);
-        }
+        // 🔔 Haptic (safe, one-time)
+        triggerHapticOnce();
 
-        // Auto-hide guidance after short delay
+        // Auto-hide guidance
         guidanceTimerRef.current = window.setTimeout(
           () => setGuidance(null),
           800
@@ -181,16 +194,14 @@ export function ARScene({ target, vehicle, parts = [] }: Props) {
         {parts.map((part, index) => {
           const partRef = usePartAnchor(part);
 
-          // 🔄 Confidence smoothing
-          const key = part.name;
           const prev =
-            smoothConfRef.current.get(key) ??
+            smoothConfRef.current.get(part.name) ??
             part.confidence;
 
           const smoothed =
             prev * 0.7 + part.confidence * 0.3;
 
-          smoothConfRef.current.set(key, smoothed);
+          smoothConfRef.current.set(part.name, smoothed);
 
           const isSelected = selectedPart === part;
 
@@ -216,12 +227,10 @@ export function ARScene({ target, vehicle, parts = [] }: Props) {
                       : "1px solid transparent",
                   }}
                 >
-                  {/* Part name */}
                   <div style={{ marginBottom: 4 }}>
                     {part.name}
                   </div>
 
-                  {/* Confidence bar */}
                   <div
                     style={{
                       width: 60,
