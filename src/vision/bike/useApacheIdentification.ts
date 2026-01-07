@@ -4,7 +4,9 @@ let model: tf.LayersModel | null = null;
 
 async function loadModel() {
   if (!model) {
-    model = await tf.loadLayersModel("/models/apache/model.json");
+    model = await tf.loadLayersModel(
+      "/models/apache/model.json"
+    );
   }
   return model;
 }
@@ -22,9 +24,11 @@ export async function isApacheBike(
     .expandDims(0);
 
   const prediction = m.predict(tensor) as tf.Tensor;
-  const confidence = (await prediction.data())[0];
+  const scores = await prediction.data();
 
-  tf.dispose([tensor, prediction]);
+  tensor.dispose();
+  prediction.dispose();
 
-  return confidence > 0.85;
+  // index 0 = apache_rtr_200_4v
+  return scores[0] > 0.8;
 }

@@ -3,9 +3,11 @@ import type { VehiclePart } from "./types";
 
 let model: tf.LayersModel | null = null;
 
-async function loadModel() {
+async function loadPartsModel() {
   if (!model) {
-    model = await tf.loadLayersModel("/models/apache-parts/model.json");
+    model = await tf.loadLayersModel(
+      "/models/apache-parts/model.json"
+    );
   }
   return model;
 }
@@ -13,7 +15,7 @@ async function loadModel() {
 export async function detectApacheParts(
   crop: HTMLCanvasElement
 ): Promise<VehiclePart[]> {
-  const m = await loadModel();
+  const m = await loadPartsModel();
 
   const tensor = tf.browser
     .fromPixels(crop)
@@ -23,15 +25,25 @@ export async function detectApacheParts(
     .expandDims(0);
 
   const prediction = m.predict(tensor) as tf.Tensor;
-  const data = await prediction.data();
+  const scores = await prediction.data();
 
-  tf.dispose([tensor, prediction]);
+  tensor.dispose();
+  prediction.dispose();
 
-  const labels = ["Headlamp", "Fuel Tank", "Exhaust", "Seat"];
+  const labels = [
+    "headlight",
+    "fuel_tank",
+    "exhaust",
+    "seat",
+    "engine",
+    "wheel",
+  ];
 
-  return labels.map((label, i) => ({
-    name: label,
-    confidence: data[i],
-    bbox: [0, 0, 0, 0] as [number, number, number, number], // anchor later
-  })).filter(p => p.confidence > 0.6);
+  return labels
+    .map((name, i) => ({
+      name,
+      confidence: scores[i],
+      bbox: [0, 0, 0, 0] as [number, number, number, number],
+    }))
+    .filter(p => p.confidence > 0.7);
 }
