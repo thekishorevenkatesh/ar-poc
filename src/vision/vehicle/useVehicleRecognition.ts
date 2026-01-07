@@ -12,6 +12,7 @@ export type VehicleInfo = {
 const CONFIDENCE_ALPHA = 0.3;      // smoothing factor
 const MIN_ACCEPT_CONFIDENCE = 0.6; // ignore weak predictions
 const HOLD_TIME_MS = 2000;         // keep label alive if detection drops
+const RECOGNITION_INTERVAL = 1200; // ms (API throttle)
 
 export function useVehicleRecognition(
   video?: HTMLVideoElement,
@@ -22,9 +23,19 @@ export function useVehicleRecognition(
   // internal memory
   const lastRef = useRef<VehicleInfo | null>(null);
   const lastSeenRef = useRef<number>(0);
+  const lastRunRef = useRef<number>(0);
 
   useEffect(() => {
     if (!video || !object || object.label !== "car") return;
+
+    const now = Date.now();
+
+    // 🔒 Rate limit API calls
+    if (now - lastRunRef.current < RECOGNITION_INTERVAL) {
+      return;
+    }
+
+    lastRunRef.current = now;
 
     let cancelled = false;
 
@@ -32,51 +43,48 @@ export function useVehicleRecognition(
       const crop = cropFromVideo(video, object.bbox);
       const result = await classifyVehicle(crop);
 
-      const now = Date.now();
-
       if (cancelled) return;
 
-      // If API gives nothing or very low confidence
+      const timestamp = Date.now();
+
+      // ❌ No or weak prediction
       if (!result || result.confidence < MIN_ACCEPT_CONFIDENCE) {
         if (
           lastRef.current &&
-          now - lastSeenRef.current < HOLD_TIME_MS
+          timestamp - lastSeenRef.current < HOLD_TIME_MS
         ) {
-          // keep last known vehicle
           setVehicle(lastRef.current);
         }
         return;
       }
 
-      // First valid detection
+      // ✅ First valid detection
       if (!lastRef.current) {
         lastRef.current = result;
-        lastSeenRef.current = now;
+        lastSeenRef.current = timestamp;
         setVehicle(result);
         return;
       }
 
-      // Same vehicle → smooth confidence
+      // 🔁 Same vehicle → smooth confidence
       if (
         result.brand === lastRef.current.brand &&
         result.model === lastRef.current.model
       ) {
-        const smoothedConfidence =
-          lastRef.current.confidence * (1 - CONFIDENCE_ALPHA) +
-          result.confidence * CONFIDENCE_ALPHA;
-
         lastRef.current = {
           ...result,
-          confidence: smoothedConfidence,
+          confidence:
+            lastRef.current.confidence * (1 - CONFIDENCE_ALPHA) +
+            result.confidence * CONFIDENCE_ALPHA,
         };
       } else {
-        // Different vehicle detected → switch only if strong
+        // 🔄 Switch vehicle only if clearly stronger
         if (result.confidence > lastRef.current.confidence + 0.15) {
           lastRef.current = result;
         }
       }
 
-      lastSeenRef.current = now;
+      lastSeenRef.current = timestamp;
       setVehicle(lastRef.current);
     };
 
