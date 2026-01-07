@@ -31,13 +31,14 @@ export async function detectApacheParts(
   prediction.dispose();
 
   const labels = [
-    "headlight",
-    "fuel_tank",
-    "exhaust",
-    "seat",
-    "engine",
-    "wheel",
-  ];
+  "Headlight",
+  "Fuel_Tank",
+  "Seat",
+  "Exhaust",
+  "Front_Wheel",
+  "Rear_Wheel",
+  "Handlebar"
+]
 
   return labels
     .map((name, i) => ({
