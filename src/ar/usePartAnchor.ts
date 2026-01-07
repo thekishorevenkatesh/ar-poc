@@ -1,7 +1,8 @@
+// src/ar/usePartAnchor.ts
 import { useFrame, useThree } from "@react-three/fiber";
 import { useRef } from "react";
 import * as THREE from "three";
-import type { VehiclePart } from "../vision/parts/types";
+import type { VehiclePart } from "../vision/bike/types";
 
 export function usePartAnchor(part?: VehiclePart) {
   const { camera, scene } = useThree();

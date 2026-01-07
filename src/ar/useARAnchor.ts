@@ -1,7 +1,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useRef } from "react";
 import * as THREE from "three";
-import type { DetectedObject } from "../vision/detector";
+import type { DetectedObject } from "../vision/detector/detector";
 
 export function useARAnchor(object?: DetectedObject) {
   const { camera, scene } = useThree();

@@ -1,4 +1,4 @@
-import type { DetectedObject } from "../vision/detector";
+import type { DetectedObject } from "../vision/detector/detector";
 
 type Props = {
   objects: DetectedObject[];

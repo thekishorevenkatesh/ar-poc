@@ -1,11 +1,10 @@
 import { Html } from "@react-three/drei";
 import { useARAnchor } from "./useARAnchor";
-import { usePartAnchor } from "./usePartAnchor";
 import { useEffect, useRef, useState } from "react";
 
-import type { DetectedObject } from "../vision/detector";
-import type { VehicleInfo } from "../vision/vehicle/useVehicleRecognition";
-import type { VehiclePart } from "../vision/parts/types";
+import type { DetectedObject } from "../vision/detector/detector";
+import type { VehiclePart } from "../vision/bike/types";
+import { PartLabel } from "./PartLabel";
 
 /* ───────────── Helpers ───────────── */
 
@@ -32,19 +31,11 @@ function getGuidance(
   return null;
 }
 
-function partColor(conf: number) {
-  if (conf >= 0.85) return "#00ffcc";
-  if (conf >= 0.7) return "#ffd166";
-  return "#ff6b6b";
-}
-
 function triggerHapticOnce() {
   try {
-    if ("vibrate" in navigator) {
-      navigator.vibrate(50);
-    }
-  } catch (e) {
-    // Ignore
+    if ("vibrate" in navigator) navigator.vibrate(30);
+  } catch {
+    /* ignore */
   }
 }
 
@@ -52,18 +43,18 @@ function triggerHapticOnce() {
 
 type Props = {
   target?: DetectedObject;
-  vehicle?: VehicleInfo | null;
+  isApache?: boolean;
   parts?: VehiclePart[];
-  onRefreshParts?: () => void; // ✅ ADDED
+  onRefreshParts?: () => void;
 };
 
 /* ───────────── Component ───────────── */
 
 export function ARScene({
   target,
-  vehicle,
+  isApache = false,
   parts = [],
-  onRefreshParts, // ✅ ADDED
+  onRefreshParts,
 }: Props) {
   const anchorRef = useARAnchor(target);
 
@@ -71,10 +62,6 @@ export function ARScene({
   const [guidance, setGuidance] = useState<string | null>(null);
   const guidanceTimerRef = useRef<number | null>(null);
   const lockedRef = useRef(false);
-
-  const [selectedPart, setSelectedPart] = useState<VehiclePart | null>(null);
-
-  const smoothConfRef = useRef<Map<string, number>>(new Map());
 
   /* ───────────── Guidance + Lock Logic ───────────── */
 
@@ -89,7 +76,6 @@ export function ARScene({
     const center: [number, number] = [x + w / 2, y + h / 2];
 
     const newGuidance = getGuidance(target, lastCenterRef.current);
-
     lastCenterRef.current = center;
 
     if (newGuidance) {
@@ -103,26 +89,21 @@ export function ARScene({
     } else if (!lockedRef.current) {
       lockedRef.current = true;
       triggerHapticOnce();
+
       guidanceTimerRef.current = window.setTimeout(
         () => setGuidance(null),
         800
       );
     }
-
-    return () => {
-      if (guidanceTimerRef.current) {
-        clearTimeout(guidanceTimerRef.current);
-        guidanceTimerRef.current = null;
-      }
-    };
   }, [target]);
 
-  const isLocked = lockedRef.current && !!vehicle; // ✅ ADDED
+  const isLocked = lockedRef.current && isApache;
 
   let vehicleLabel = "Scanning vehicle…";
-  if (target && !vehicle) vehicleLabel = "Vehicle detected";
-  if (vehicle) vehicleLabel = `${vehicle.brand} ${vehicle.model}`;
 
+  if (target?.label === "motorcycle") {
+    vehicleLabel = isApache ? "TVS Apache RTR 200 4V" : "Motorcycle detected";
+  }
   /* ───────────── Render ───────────── */
 
   return (
@@ -130,7 +111,7 @@ export function ARScene({
       <ambientLight intensity={0.8} />
 
       <group ref={anchorRef}>
-        {/* 🔵 VEHICLE LOCK RING — ADDED */}
+        {/* 🔵 Lock ring */}
         {isLocked && (
           <Html center distanceFactor={8}>
             <div
@@ -162,10 +143,8 @@ export function ARScene({
             >
               <strong>{vehicleLabel}</strong>
 
-              {vehicle && (
-                <div style={{ fontSize: 11, opacity: 0.85 }}>
-                  {Math.round(vehicle.confidence * 100)}%
-                </div>
+              {isApache && (
+                <div style={{ fontSize: 11, opacity: 0.85 }}>Identified</div>
               )}
 
               {guidance && (
@@ -184,54 +163,21 @@ export function ARScene({
           </Html>
         )}
 
-        {/* 🔧 Vehicle parts */}
-        {parts.map((part, index) => {
-          const partRef = usePartAnchor(part);
-
-          const prev = smoothConfRef.current.get(part.name) ?? part.confidence;
-
-          const smoothed = prev * 0.7 + part.confidence * 0.3;
-
-          smoothConfRef.current.set(part.name, smoothed);
-
-          const isSelected = selectedPart === part;
-
-          return (
-            <group ref={partRef} key={index}>
-              <Html distanceFactor={10}>
-                <div
-                  onClick={() => {
-                    setSelectedPart(isSelected ? null : part);
-                    onRefreshParts?.(); // 🔁 ADDED
-                  }}
-                  style={{
-                    padding: "6px 8px",
-                    background: "rgba(20,20,20,0.95)",
-                    borderRadius: 6,
-                    fontSize: 11,
-                    color: partColor(smoothed),
-                    cursor: "pointer",
-                    border: isSelected
-                      ? "1px solid #00ffcc"
-                      : "1px solid transparent",
-                  }}
-                >
-                  {part.name}
-                </div>
-              </Html>
-            </group>
-          );
-        })}
+        {/* 🔧 Parts */}
+        {parts.map((part, index) => (
+          <PartLabel key={index} part={part} onSelect={onRefreshParts} />
+        ))}
       </group>
+
+      {/* Animation CSS */}
       <Html>
-        {/* 🔵 Lock ring animation */}
         <style>
           {`
-          @keyframes lockPulse {
-            0% { transform: scale(0.7); opacity: 0.8; }
-            100% { transform: scale(1.1); opacity: 0.2; }
-          }
-        `}
+            @keyframes lockPulse {
+              0% { transform: scale(0.7); opacity: 0.8; }
+              100% { transform: scale(1.1); opacity: 0.2; }
+            }
+          `}
         </style>
       </Html>
     </>
