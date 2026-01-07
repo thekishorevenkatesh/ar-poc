@@ -13,18 +13,10 @@ type Props = {
   parts?: VehiclePart[];
 };
 
-export function ARCanvas({
-  target,
-  vehicle,
-  parts = [],
-}: Props) {
+export function ARCanvas({ target, vehicle, parts = [] }: Props) {
   return (
     <Canvas camera={{ position: [0, 0, 5] }}>
-      <ARScene
-        target={target}
-        vehicle={vehicle}
-        parts={parts}
-      />
+      <ARScene target={target} vehicle={vehicle} parts={parts} />
     </Canvas>
   );
 }

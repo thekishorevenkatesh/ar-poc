@@ -4,101 +4,59 @@ import { cropFromVideo } from "../vehicle/cropVehicle";
 import { classifyVehicleParts } from "./partsClassifier";
 import type { VehiclePart } from "./types";
 
-/* ───────────── CONFIG ───────────── */
-
-const PARTS_INTERVAL = 1500;       // ms between API calls
-const PARTS_CONFIDENCE = 0.6;      // minimum confidence
-const CACHE_TTL = 3000;            // ms
-const MAX_PARTS = 4;               // render limit
-const MOTION_THRESHOLD = 60;       // px movement tolerance
-const LOCK_AFTER_STABLE = 2;       // consecutive stable frames
-
-/* ───────────── HOOK ───────────── */
+const PARTS_INTERVAL = 1500;
+const PARTS_CONFIDENCE = 0.6;
+const MAX_PARTS = 4;
 
 export function useVehicleParts(
   video?: HTMLVideoElement,
   vehicle?: DetectedObject
 ) {
   const [parts, setParts] = useState<VehiclePart[]>([]);
-
   const lastRunRef = useRef(0);
-  const lastBBoxRef = useRef<[number, number] | null>(null);
-  const stableCountRef = useRef(0);
-  const lockedRef = useRef(false);
-
-  const cacheRef = useRef<{
-    parts: VehiclePart[];
-    bbox: [number, number];
-    time: number;
-  } | null>(null);
+  const hasRunOnceRef = useRef(false);
 
   useEffect(() => {
-    if (!video || !vehicle || vehicle.label !== "car") return;
-
-    const now = Date.now();
-    const [x, y] = vehicle.bbox;
-
-    /* ── 1️⃣ Motion gating (skip if car moved a lot) ── */
-    if (lastBBoxRef.current) {
-      const [px, py] = lastBBoxRef.current;
-      const moved =
-        Math.abs(px - x) > MOTION_THRESHOLD ||
-        Math.abs(py - y) > MOTION_THRESHOLD;
-
-      if (moved) {
-        stableCountRef.current = 0;
-        lockedRef.current = false;
-        lastBBoxRef.current = [x, y];
-        return;
-      }
-    }
-
-    lastBBoxRef.current = [x, y];
-
-    /* ── 2️⃣ Cache reuse ── */
-    if (
-      cacheRef.current &&
-      now - cacheRef.current.time < CACHE_TTL
-    ) {
-      setParts(cacheRef.current.parts);
+    if (!video || !vehicle || vehicle.label !== "car") {
+      setParts([]);
+      hasRunOnceRef.current = false;
       return;
     }
 
-    /* ── 3️⃣ Stop calling API if locked ── */
-    if (lockedRef.current) return;
+    const now = Date.now();
 
-    /* ── 4️⃣ Throttle API calls ── */
-    if (now - lastRunRef.current < PARTS_INTERVAL) return;
+    // 🔥 Allow FIRST run no matter what
+    if (!hasRunOnceRef.current) {
+      hasRunOnceRef.current = true;
+    } else {
+      // throttle only AFTER first run
+      if (now - lastRunRef.current < PARTS_INTERVAL) return;
+    }
+
     lastRunRef.current = now;
-
     let cancelled = false;
 
     const run = async () => {
+      console.log("[PARTS] Running parts detection");
+
       const crop = cropFromVideo(video, vehicle.bbox);
       const result = await classifyVehicleParts(crop);
 
-      if (cancelled || !result?.length) return;
+      if (cancelled) return;
 
-      /* ── 5️⃣ Confidence filtering + cap count ── */
+      if (!result?.length) {
+        console.log("[PARTS] No parts detected");
+        setParts([]);
+        return;
+      }
+
       const filtered = result
-        .filter((p :any)=> p.confidence >= PARTS_CONFIDENCE)
+        .filter((p:any) => p.confidence >= PARTS_CONFIDENCE)
         .slice(0, MAX_PARTS);
 
-      if (!filtered.length) return;
+      console.log("[PARTS] Detected:", filtered);
 
       setParts(filtered);
-
-      cacheRef.current = {
-        parts: filtered,
-        bbox: [x, y],
-        time: Date.now(),
-      };
-
-      /* ── 6️⃣ Stability lock (prevents flicker) ── */
-      stableCountRef.current += 1;
-      if (stableCountRef.current >= LOCK_AFTER_STABLE) {
-        lockedRef.current = true;
-      }
     };
 
     run();
